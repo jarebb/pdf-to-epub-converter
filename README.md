@@ -52,8 +52,12 @@ Not implemented yet:
 
 ```bash
 python -m pip install -e ".[dev]"
-pre-commit install
+pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
+
+The pre-commit config installs both pre-commit checks and a commit-message hook.
+Commit messages must follow Conventional Commits, for example:
+`feat(extract): add page layout models`.
 
 ## Usage
 
