@@ -265,6 +265,9 @@ Future refinement:
 
 ### Stage G: Intermediate Document Model
 
+Initial implementation status: implemented as the stable contract between
+reconstruction/asset extraction and future EPUB rendering.
+
 The document model is the contract between extraction/analysis and EPUB rendering.
 
 ```text
@@ -311,6 +314,10 @@ Reasons for this model:
 - Later OCR or advanced extraction backends can feed the same renderer.
 
 ### Stage H: Structure Detection
+
+Initial implementation status: implemented for first-pass headings, lists, blockquotes,
+figures/captions, and code blocks. Tables, footnotes, and deeper outline integration
+remain future refinements.
 
 Use document-level statistics:
 
@@ -366,6 +373,9 @@ Programming book structures:
 
 ### Stage I: XHTML and CSS Reconstruction
 
+Initial implementation status: implemented for semantic EPUB 3 XHTML files, nav.xhtml,
+and reader-friendly CSS.
+
 Output should be semantic EPUB 3 XHTML.
 
 Mappings:
@@ -392,6 +402,9 @@ CSS principles:
 - Keep tables readable, with horizontal overflow handling if needed.
 
 ### Stage J: EPUB Assembly
+
+Initial implementation status: implemented as a deterministic hand-built EPUB package
+writer. EPUBCheck validation is Stage K.
 
 Preferred approach:
 
@@ -422,6 +435,10 @@ Important packaging rules:
 - Metadata must include identifier, title, language, and modified date.
 
 ### Stage K: Validation and Reporting
+
+Initial implementation status: implemented for EPUBCheck subprocess integration and
+JSON conversion quality reports. EPUBCheck installation/distribution remains an
+environment concern.
 
 Validation:
 

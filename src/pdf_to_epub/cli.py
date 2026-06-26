@@ -6,14 +6,20 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Optional
 
 import fitz
 
 from pdf_to_epub.classify.page_classifier import classify_document_pages
+from pdf_to_epub.document.builder import build_document_model
+from pdf_to_epub.document.models import DocumentModel
+from pdf_to_epub.epub.writer import EpubAssemblyError, write_epub
 from pdf_to_epub.extract.models import DocumentExtraction
 from pdf_to_epub.extract.page_extractor import extract_document_model
+from pdf_to_epub.ingest.metadata import normalize_pdf_metadata
 from pdf_to_epub.ingest.pdf_loader import IngestError, ingest_pdf
 from pdf_to_epub.ingest.permissions import authenticate_document, summarize_permissions
 from pdf_to_epub.ocr.fallback import (
@@ -23,6 +29,13 @@ from pdf_to_epub.ocr.fallback import (
     ensure_ocr_not_required,
 )
 from pdf_to_epub.reconstruct.reading_order import reconstruct_reading_order
+from pdf_to_epub.report.conversion import ConversionReport, build_conversion_report
+from pdf_to_epub.validate.epubcheck import (
+    EpubCheckConfig,
+    EpubCheckResult,
+    ValidationError,
+    validate_epub,
+)
 from pdf_to_epub.visuals.asset_extractor import extract_visual_assets
 
 
@@ -94,6 +107,78 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pretty-print JSON output.",
     )
     _add_ocr_options(reconstruct_parser)
+
+    model_parser = subparsers.add_parser(
+        "model",
+        help="Build the intermediate semantic document model.",
+    )
+    model_parser.add_argument("input_pdf", type=Path, help="Path to the input PDF.")
+    model_parser.add_argument(
+        "--password",
+        help="Password for encrypted PDFs. Refuses encrypted PDFs if omitted or invalid.",
+    )
+    model_parser.add_argument(
+        "--assets-dir",
+        type=Path,
+        help="Optional directory where extracted visual assets will be written.",
+    )
+    model_parser.add_argument(
+        "--report",
+        type=Path,
+        help="Optional path to write the document model as JSON.",
+    )
+    model_parser.add_argument(
+        "--pretty",
+        action="store_true",
+        help="Pretty-print JSON output.",
+    )
+    _add_ocr_options(model_parser)
+
+    epub_parser = subparsers.add_parser(
+        "epub",
+        help="Build a reflowable EPUB 3 package.",
+    )
+    epub_parser.add_argument("input_pdf", type=Path, help="Path to the input PDF.")
+    epub_parser.add_argument("output_epub", type=Path, help="Path to write the EPUB file.")
+    epub_parser.add_argument(
+        "--password",
+        help="Password for encrypted PDFs. Refuses encrypted PDFs if omitted or invalid.",
+    )
+    epub_parser.add_argument(
+        "--assets-dir",
+        type=Path,
+        help="Optional directory where extracted visual assets will be written.",
+    )
+    epub_parser.add_argument(
+        "--report",
+        type=Path,
+        help="Optional path to write the conversion quality report as JSON.",
+    )
+    epub_parser.add_argument(
+        "--pretty",
+        action="store_true",
+        help="Pretty-print JSON report output.",
+    )
+    epub_parser.add_argument(
+        "--epubcheck-command",
+        help="Optional epubcheck command to run after assembly.",
+    )
+    epub_parser.add_argument(
+        "--epubcheck-jar",
+        type=Path,
+        help="Optional EPUBCheck jar path. Uses java -jar when provided.",
+    )
+    epub_parser.add_argument(
+        "--java-command",
+        default="java",
+        help="Java command used with --epubcheck-jar.",
+    )
+    epub_parser.add_argument(
+        "--require-epubcheck",
+        action="store_true",
+        help="Fail when EPUBCheck is unavailable or reports errors.",
+    )
+    _add_ocr_options(epub_parser)
 
     visuals_parser = subparsers.add_parser(
         "visuals",
@@ -228,6 +313,60 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _write_json(visual_result.to_dict(), args.report, args.pretty)
         return 0
 
+    if args.command == "model":
+        try:
+            document = _open_extractable_pdf(args.input_pdf, password=args.password)
+        except IngestError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            document_model = _build_document_model_from_pdf(document, args, args.assets_dir)
+        except OcrFallbackError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        finally:
+            document.close()
+        _write_json(document_model.to_dict(), args.report, args.pretty)
+        return 0
+
+    if args.command == "epub":
+        try:
+            document = _open_extractable_pdf(args.input_pdf, password=args.password)
+        except IngestError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            if args.assets_dir:
+                document_model, report = _convert_pdf_to_epub(
+                    document,
+                    args,
+                    args.assets_dir,
+                )
+                output_path = write_epub(document_model, args.output_epub)
+            else:
+                with TemporaryDirectory(prefix="pdf-to-epub-assets-") as temp_dir:
+                    document_model, report = _convert_pdf_to_epub(
+                        document,
+                        args,
+                        Path(temp_dir),
+                    )
+                    output_path = write_epub(document_model, args.output_epub)
+            epubcheck_result = validate_epub(output_path, _epubcheck_config(args))
+            report = replace(
+                report,
+                output_path=str(output_path.expanduser()),
+                epubcheck_result=epubcheck_result.to_dict(),
+            )
+            if args.report:
+                _write_json(report.to_dict(), args.report, args.pretty)
+        except (OcrFallbackError, EpubAssemblyError, ValidationError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        finally:
+            document.close()
+        print(str(output_path))
+        return 0
+
     parser.print_help()
     return 2
 
@@ -281,6 +420,80 @@ def _extract_with_optional_ocr(
         ocr_config,
     )
     return extraction_result
+
+
+def _build_document_model_from_pdf(
+    document: fitz.Document,
+    args: argparse.Namespace,
+    assets_dir: Optional[Path],
+) -> DocumentModel:
+    extraction_result = _extract_with_optional_ocr(document, args)
+    reconstruction_result = reconstruct_reading_order(extraction_result)
+    visual_result = extract_visual_assets(document, assets_dir) if assets_dir else None
+    metadata = normalize_pdf_metadata(document.metadata or {}, args.input_pdf)
+    return build_document_model(
+        reconstruction_result,
+        metadata=metadata,
+        visual_manifest=visual_result,
+    )
+
+
+def _convert_pdf_to_epub(
+    document: fitz.Document,
+    args: argparse.Namespace,
+    assets_dir: Path,
+) -> tuple[DocumentModel, ConversionReport]:
+    classifications, classification_summary = classify_document_pages(document)
+    if not args.enable_ocr:
+        ensure_ocr_not_required(classifications)
+        extraction_result = extract_document_model(document, classifications=classifications)
+    else:
+        extraction_result = extract_document_model(document, classifications=classifications)
+        ocr_config = OcrConfig(
+            language=args.ocr_language,
+            dpi=args.ocr_dpi,
+            max_workers=args.ocr_workers,
+            command=args.ocr_command,
+            tessdata_dir=args.ocr_tessdata_dir,
+        )
+        extraction_result, _ocr_report = apply_ocr_fallback(
+            document,
+            extraction_result,
+            classifications,
+            ocr_config,
+        )
+
+    reading_order = reconstruct_reading_order(extraction_result)
+    visual_manifest = extract_visual_assets(document, assets_dir)
+    metadata = normalize_pdf_metadata(document.metadata or {}, args.input_pdf)
+    document_model = build_document_model(
+        reading_order,
+        metadata=metadata,
+        visual_manifest=visual_manifest,
+    )
+    report = build_conversion_report(
+        input_path=args.input_pdf,
+        output_path=args.output_epub,
+        classification_summary=classification_summary,
+        reading_order=reading_order,
+        document_model=document_model,
+        visual_manifest=visual_manifest,
+        epubcheck_result=EpubCheckResult(
+            status="not_run",
+            tool="epubcheck",
+            messages=["validation_pending_until_epub_written"],
+        ),
+    )
+    return document_model, report
+
+
+def _epubcheck_config(args: argparse.Namespace) -> EpubCheckConfig:
+    return EpubCheckConfig(
+        command=args.epubcheck_command,
+        jar_path=args.epubcheck_jar,
+        java_command=args.java_command,
+        required=args.require_epubcheck,
+    )
 
 
 if __name__ == "__main__":

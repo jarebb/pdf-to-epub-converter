@@ -41,15 +41,19 @@ Implemented:
 - Stage D: reading-order reconstruction.
 - Stage E: image and diagram extraction.
 - Stage F: conditional local OCR fallback for textless/image-only pages.
-- CLI commands for ingest, extraction, reconstruction, OCR-assisted extraction, and visual
-  asset reports.
+- Stage G: intermediate semantic document model.
+- Stage H: initial structure detection for headings, lists, blockquotes, figures, and code.
+- Stage I: semantic XHTML/CSS rendering.
+- Stage J: deterministic EPUB 3 package assembly.
+- Stage K: EPUBCheck validation integration and conversion quality reports.
+- CLI commands for ingest, extraction, reconstruction, OCR-assisted extraction, document
+  model, EPUB assembly, and visual asset reports.
 - Ruff, mypy, pytest, and pre-commit setup.
 
 Not implemented yet:
 
-- Full semantic document model.
-- EPUB rendering and packaging.
-- EPUBCheck validation.
+- Advanced semantic refinements for lists, tables, footnotes, and callouts.
+- Automated installation of EPUBCheck.
 
 ## Setup
 
@@ -96,6 +100,31 @@ Generate a JSON reading-order reconstruction report:
 
 ```bash
 PYTHONPATH=src python -m pdf_to_epub.cli reconstruct path/to/book.pdf --report reports/reconstruct.json --pretty
+```
+
+Generate a JSON intermediate document model:
+
+```bash
+PYTHONPATH=src python -m pdf_to_epub.cli model path/to/book.pdf --assets-dir reports/assets --report reports/model.json --pretty
+```
+
+Build an EPUB 3 package:
+
+```bash
+PYTHONPATH=src python -m pdf_to_epub.cli epub path/to/book.pdf reports/book.epub
+```
+
+Build an EPUB and write a conversion quality report:
+
+```bash
+PYTHONPATH=src python -m pdf_to_epub.cli epub path/to/book.pdf reports/book.epub --report reports/conversion.json --pretty
+```
+
+If `epubcheck` is on `PATH`, it is run automatically. You can also configure it
+explicitly and make validation mandatory:
+
+```bash
+PYTHONPATH=src python -m pdf_to_epub.cli epub path/to/book.pdf reports/book.epub --epubcheck-jar path/to/epubcheck.jar --require-epubcheck
 ```
 
 Extract embedded images and rasterized vector diagram regions:

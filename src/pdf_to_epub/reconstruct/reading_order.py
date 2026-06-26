@@ -78,6 +78,9 @@ def _detect_repeated_artifacts(
     pages: list[PageModel],
     diagnostics: list[str],
 ) -> set[tuple[str, str]]:
+    if len(pages) < MIN_REPEATED_ARTIFACT_PAGES:
+        return set()
+
     positions_by_signature: dict[tuple[str, str], set[int]] = defaultdict(set)
     for page in pages:
         for block in page.blocks:
@@ -91,11 +94,10 @@ def _detect_repeated_artifacts(
                 continue
             positions_by_signature[(band, signature)].add(page.page_number)
 
-    minimum_pages = min(MIN_REPEATED_ARTIFACT_PAGES, max(len(pages), 1))
     artifacts = {
         key
         for key, page_numbers in positions_by_signature.items()
-        if len(page_numbers) >= minimum_pages
+        if len(page_numbers) >= MIN_REPEATED_ARTIFACT_PAGES
     }
     if artifacts:
         diagnostics.append(f"repeated_artifact_signatures:{len(artifacts)}")

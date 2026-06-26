@@ -67,6 +67,18 @@ def test_reconstruct_normalizes_ligatures_and_dehyphenates_line_breaks() -> None
     assert "dehyphenated_line_break" in text_blocks[0].diagnostics
 
 
+def test_reconstruct_keeps_single_page_top_text() -> None:
+    extraction = DocumentExtraction(
+        page_count=1,
+        pages=[_page(1, [_text("h1", "Chapter 1", (40, 20, 200, 40))])],
+    )
+
+    reconstruction = reconstruct_reading_order(extraction)
+
+    assert [block.text for block in reconstruction.blocks if block.type == "text"] == ["Chapter 1"]
+    assert reconstruction.removed_artifacts == []
+
+
 def test_reconstruct_attaches_nearby_figure_caption() -> None:
     image = ExtractedBlock(
         id="img1",
