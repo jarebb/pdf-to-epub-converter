@@ -15,8 +15,9 @@ from pdf_to_epub.document.models import (
     DocumentSection,
     TocEntry,
 )
+from pdf_to_epub.extract.models import BBox
 from pdf_to_epub.reconstruct.models import OrderedBlock, ReadingOrderDocument
-from pdf_to_epub.visuals.models import VisualAssetManifest
+from pdf_to_epub.visuals.models import VisualAssetManifest, VisualPlacement
 
 DEFAULT_TITLE = "Untitled"
 CHAPTER_PATTERN = re.compile(r"^\s*(chapter|part|appendix)\s+[\wivxlcdm.-]+", re.IGNORECASE)
@@ -34,6 +35,7 @@ def build_document_model(
     metadata = _normalize_metadata(metadata)
     assets = _document_assets(visual_manifest)
     asset_id_by_ref = _asset_id_by_ref(assets)
+    asset_id_by_figure = _asset_id_by_figure(reading_order.blocks, visual_manifest)
     body_font_size = _body_font_size(reading_order.blocks)
     body_left_margin = _body_left_margin(reading_order.blocks)
     caption_by_id = {
@@ -56,6 +58,7 @@ def build_document_model(
             body_left_margin=body_left_margin,
             caption_by_id=caption_by_id,
             asset_id_by_ref=asset_id_by_ref,
+            asset_id_by_figure=asset_id_by_figure,
         )
         if document_block is None:
             continue
@@ -139,6 +142,71 @@ def _asset_id_by_ref(assets: list[DocumentAsset]) -> dict[str, str]:
     return {asset.file_name: asset.id for asset in assets}
 
 
+def _asset_id_by_figure(
+    blocks: list[OrderedBlock],
+    visual_manifest: Optional[VisualAssetManifest],
+) -> dict[str, str]:
+    if visual_manifest is None:
+        return {}
+
+    placements_by_page: dict[int, list[VisualPlacement]] = {}
+    for placement in visual_manifest.placements:
+        placements_by_page.setdefault(placement.source_page, []).append(placement)
+
+    asset_id_by_block: dict[str, str] = {}
+    used_placement_ids: set[str] = set()
+    for block in sorted(blocks, key=lambda item: item.reading_order):
+        if block.type != "figure":
+            continue
+        candidates = [
+            placement
+            for placement in placements_by_page.get(block.source_page, [])
+            if placement.id not in used_placement_ids
+        ]
+        matched_placement = _best_matching_placement(block, candidates)
+        if matched_placement is None:
+            continue
+        asset_id_by_block[block.id] = matched_placement.asset_id
+        used_placement_ids.add(matched_placement.id)
+    return asset_id_by_block
+
+
+def _best_matching_placement(
+    block: OrderedBlock,
+    placements: list[VisualPlacement],
+) -> Optional[VisualPlacement]:
+    scored = [
+        (_placement_match_score(block.bbox, placement.bbox), placement) for placement in placements
+    ]
+    scored = [(score, placement) for score, placement in scored if score >= 0.5]
+    if not scored:
+        return None
+    return max(scored, key=lambda item: item[0])[1]
+
+
+def _placement_match_score(block_bbox: BBox, placement_bbox: BBox) -> float:
+    block_area = _bbox_area(block_bbox)
+    placement_area = _bbox_area(placement_bbox)
+    if block_area <= 0 or placement_area <= 0:
+        return 0.0
+    overlap = _bbox_overlap_area(block_bbox, placement_bbox)
+    return overlap / min(block_area, placement_area)
+
+
+def _bbox_area(bbox: BBox) -> float:
+    width = max(float(bbox[2]) - float(bbox[0]), 0.0)
+    height = max(float(bbox[3]) - float(bbox[1]), 0.0)
+    return width * height
+
+
+def _bbox_overlap_area(left: BBox, right: BBox) -> float:
+    x0 = max(float(left[0]), float(right[0]))
+    y0 = max(float(left[1]), float(right[1]))
+    x1 = min(float(left[2]), float(right[2]))
+    y1 = min(float(left[3]), float(right[3]))
+    return _bbox_area((x0, y0, x1, y1))
+
+
 def _document_block(
     ordered: OrderedBlock,
     *,
@@ -146,6 +214,7 @@ def _document_block(
     body_left_margin: Optional[float],
     caption_by_id: dict[str, OrderedBlock],
     asset_id_by_ref: dict[str, str],
+    asset_id_by_figure: dict[str, str],
 ) -> Optional[DocumentBlock]:
     if ordered.attached_to:
         return None
@@ -157,7 +226,7 @@ def _document_block(
         if caption_block is not None:
             caption = caption_block.text
 
-    asset_id = _asset_id_for_block(ordered, asset_id_by_ref)
+    asset_id = _asset_id_for_block(ordered, asset_id_by_ref, asset_id_by_figure)
     source_block_ids = [ordered.source_block_id] if ordered.source_block_id else []
     return DocumentBlock(
         id=f"doc-{ordered.reading_order:06d}",
@@ -225,7 +294,13 @@ def _heading_level(block: OrderedBlock, body_font_size: Optional[float]) -> int:
     return 2
 
 
-def _asset_id_for_block(block: OrderedBlock, asset_id_by_ref: dict[str, str]) -> Optional[str]:
+def _asset_id_for_block(
+    block: OrderedBlock,
+    asset_id_by_ref: dict[str, str],
+    asset_id_by_figure: dict[str, str],
+) -> Optional[str]:
+    if block.id in asset_id_by_figure:
+        return asset_id_by_figure[block.id]
     if block.asset_ref is None:
         return None
     file_name = block.asset_ref.rsplit("/", 1)[-1]

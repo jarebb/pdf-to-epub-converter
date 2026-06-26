@@ -66,7 +66,10 @@ def render_book(model: DocumentModel) -> RenderedBook:
 def _render_section(model: DocumentModel, section: DocumentSection, index: int) -> str:
     title = section.title or model.metadata.get("title", "Untitled")
     asset_file_by_id = {asset.id: asset.file_name for asset in model.assets}
-    blocks = "\n".join(_render_block(block, asset_file_by_id) for block in section.blocks)
+    packaged_asset_refs = {f"images/{asset.file_name}" for asset in model.assets}
+    blocks = "\n".join(
+        _render_block(block, asset_file_by_id, packaged_asset_refs) for block in section.blocks
+    )
     return _xhtml_document(
         title=title,
         body=f'<section id="{_xml_id(section.id)}">\n{blocks}\n</section>',
@@ -74,7 +77,11 @@ def _render_section(model: DocumentModel, section: DocumentSection, index: int) 
     )
 
 
-def _render_block(block: DocumentBlock, asset_file_by_id: dict[str, str]) -> str:
+def _render_block(
+    block: DocumentBlock,
+    asset_file_by_id: dict[str, str],
+    packaged_asset_refs: set[str],
+) -> str:
     block_id = _xml_id(block.id)
     if block.type == "paragraph":
         return f'<p id="{block_id}">{_text(block.text)}</p>'
@@ -90,7 +97,7 @@ def _render_block(block: DocumentBlock, asset_file_by_id: dict[str, str]) -> str
     if block.type == "list_item":
         return f'<p id="{block_id}">{_text(block.text)}</p>'
     if block.type == "figure":
-        return _render_figure(block, asset_file_by_id)
+        return _render_figure(block, asset_file_by_id, packaged_asset_refs)
     if block.type == "page_break":
         page = block.source_pages[0] if block.source_pages else 0
         return f'<span id="{block_id}" epub:type="pagebreak" title="{page}"></span>'
@@ -107,14 +114,18 @@ def _render_list(block: DocumentBlock) -> str:
     return f'<{tag} id="{_xml_id(block.id)}">\n{items}\n</{tag}>'
 
 
-def _render_figure(block: DocumentBlock, asset_file_by_id: dict[str, str]) -> str:
+def _render_figure(
+    block: DocumentBlock,
+    asset_file_by_id: dict[str, str],
+    packaged_asset_refs: set[str],
+) -> str:
     figure_id = _xml_id(block.id)
     alt_text = block.caption or _generic_alt_text(block)
     image = ""
     if block.asset_id:
         file_name = asset_file_by_id.get(block.asset_id, block.asset_id)
         image = f'<img src="../images/{_attr(file_name)}" alt="{_attr(alt_text)}" />'
-    elif block.asset_ref:
+    elif block.asset_ref and block.asset_ref in packaged_asset_refs:
         image = f'<img src="../{_attr(block.asset_ref)}" alt="{_attr(alt_text)}" />'
     caption = f"<figcaption>{_text(block.caption)}</figcaption>" if block.caption else ""
     return f'<figure id="{figure_id}">{image}{caption}</figure>'

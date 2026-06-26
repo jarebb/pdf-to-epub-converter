@@ -1,7 +1,8 @@
 from pdf_to_epub.document.builder import build_document_model
 from pdf_to_epub.extract.models import StyleFeatures
 from pdf_to_epub.reconstruct.models import OrderedBlock, ReadingOrderDocument
-from pdf_to_epub.visuals.models import VisualAsset, VisualAssetManifest
+from pdf_to_epub.render.xhtml import render_book
+from pdf_to_epub.visuals.models import VisualAsset, VisualAssetManifest, VisualPlacement
 
 
 def test_build_document_model_groups_sections_and_toc() -> None:
@@ -93,6 +94,62 @@ def test_build_document_model_attaches_figure_caption_and_assets() -> None:
     )
 
 
+def test_build_document_model_matches_figure_to_visual_placement_asset() -> None:
+    reading_order = ReadingOrderDocument(
+        page_count=1,
+        blocks=[
+            _block(0, "page_break", "", 1),
+            _block(
+                1,
+                "figure",
+                "",
+                1,
+                bbox=(10.0, 20.0, 110.0, 90.0),
+                asset_ref="images/p1-img2.png",
+            ),
+        ],
+    )
+    manifest = VisualAssetManifest(
+        output_dir="/tmp/assets",
+        page_count=1,
+        assets=[
+            VisualAsset(
+                id="asset-000001",
+                kind="embedded_image",
+                file_name="embedded_image-000001-abc123.png",
+                media_type="image/png",
+                width=120,
+                height=80,
+                byte_size=100,
+                content_hash="abc",
+                source_pages=[1],
+            )
+        ],
+        placements=[
+            VisualPlacement(
+                id="place-000001",
+                asset_id="asset-000001",
+                kind="embedded_image",
+                source_page=1,
+                bbox=(10.0, 20.0, 110.0, 90.0),
+                role="figure",
+                confidence=0.95,
+            )
+        ],
+    )
+
+    model = build_document_model(reading_order, visual_manifest=manifest)
+    figure = next(
+        block for section in model.sections for block in section.blocks if block.type == "figure"
+    )
+    rendered = render_book(model)
+    chapter = rendered.xhtml_files[0].content
+
+    assert figure.asset_id == "asset-000001"
+    assert 'src="../images/embedded_image-000001-abc123.png"' in chapter
+    assert 'src="../images/p1-img2.png"' not in chapter
+
+
 def test_build_document_model_groups_list_items_and_detects_blockquote() -> None:
     reading_order = ReadingOrderDocument(
         page_count=1,
@@ -127,6 +184,7 @@ def _block(
     asset_ref: str = "",
     attached_to: str = "",
     caption_block_id: str = "",
+    bbox: tuple[float, float, float, float] = (10.0, 20.0, 100.0, 40.0),
 ) -> OrderedBlock:
     return OrderedBlock(
         id=f"ord-{reading_order:06d}",
@@ -134,8 +192,8 @@ def _block(
         source_block_id=f"src-{reading_order}" if block_type != "page_break" else None,
         source_page=page,
         reading_order=reading_order,
-        bbox=(10.0, 20.0, 100.0, 40.0),
-        normalized_bbox=(10.0, 20.0, 100.0, 40.0),
+        bbox=bbox,
+        normalized_bbox=bbox,
         text=text,
         style_features=StyleFeatures(
             font_size=font_size,
