@@ -31,9 +31,13 @@ def test_ingest_sample_pdf() -> None:
     assert result.metadata["language"] == "en"
     assert result.metadata["title"]
     assert result.permissions.can_extract
+    assert result.classification_summary.page_count == result.page_count
+    assert result.classification_summary.pages_with_text_layer > 0
+    assert result.classification_summary.pages_recommended_for_direct_extraction > 0
     assert len(result.pages) == result.page_count
     assert result.pages[0].number == 1
     assert result.pages[0].width > 0
+    assert result.pages[0].classification.category == "image_only_scanned"
     assert len(result.outline) > 0
 
 

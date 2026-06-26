@@ -964,6 +964,13 @@ Current behavior:
 - Preserves source metadata fields for audit.
 - Falls back from weak embedded PDF-file-like titles to the input filename.
 - Reads page count, page dimensions, page rotation, PDF outline/bookmark entries, and XMP presence.
+- Classifies every page for Stage B:
+  - `born_digital_text`
+  - `mixed_text_and_images`
+  - `low_confidence_text_layer`
+  - `image_only_scanned`
+  - `blank_or_unknown`
+- Reports text-layer metrics, image coverage metrics, direct-extraction recommendation, and later OCR recommendation per page.
 - Emits a JSON-serializable ingest result.
 
 CLI usage:

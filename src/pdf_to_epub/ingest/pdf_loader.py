@@ -8,6 +8,11 @@ from typing import Any, Optional
 
 import fitz
 
+from pdf_to_epub.classify.page_classifier import (
+    ClassificationSummary,
+    PageClassification,
+    classify_document_pages,
+)
 from pdf_to_epub.ingest.metadata import normalize_pdf_metadata
 from pdf_to_epub.ingest.permissions import (
     PermissionSummary,
@@ -27,6 +32,7 @@ class PageSummary:
     width: float
     height: float
     rotation: int
+    classification: PageClassification
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -35,6 +41,7 @@ class PageSummary:
             "width": self.width,
             "height": self.height,
             "rotation": self.rotation,
+            "classification": self.classification.to_dict(),
         }
 
 
@@ -59,6 +66,7 @@ class IngestResult:
     page_count: int
     metadata: dict[str, str]
     permissions: PermissionSummary
+    classification_summary: ClassificationSummary
     pages: list[PageSummary] = field(default_factory=list)
     outline: list[OutlineItem] = field(default_factory=list)
     xmp_metadata_present: bool = False
@@ -70,6 +78,7 @@ class IngestResult:
             "page_count": self.page_count,
             "metadata": self.metadata,
             "permissions": self.permissions.to_dict(),
+            "classification_summary": self.classification_summary.to_dict(),
             "pages": [page.to_dict() for page in self.pages],
             "outline": [item.to_dict() for item in self.outline],
             "xmp_metadata_present": self.xmp_metadata_present,
@@ -99,7 +108,11 @@ def ingest_pdf(input_path: Path, password: Optional[str] = None) -> IngestResult
             raise IngestError("PDF permissions do not allow text/content extraction")
 
         metadata = normalize_pdf_metadata(document.metadata or {}, path)
-        pages = [_summarize_page(document, index) for index in range(document.page_count)]
+        classifications, classification_summary = classify_document_pages(document)
+        pages = [
+            _summarize_page(document, index, classifications[index])
+            for index in range(document.page_count)
+        ]
         outline = _summarize_outline(document)
         xmp_metadata_present = bool(_get_xmp_metadata(document))
 
@@ -109,6 +122,7 @@ def ingest_pdf(input_path: Path, password: Optional[str] = None) -> IngestResult
             page_count=document.page_count,
             metadata=metadata,
             permissions=permissions,
+            classification_summary=classification_summary,
             pages=pages,
             outline=outline,
             xmp_metadata_present=xmp_metadata_present,
@@ -117,7 +131,11 @@ def ingest_pdf(input_path: Path, password: Optional[str] = None) -> IngestResult
         document.close()
 
 
-def _summarize_page(document: Any, index: int) -> PageSummary:
+def _summarize_page(
+    document: Any,
+    index: int,
+    classification: PageClassification,
+) -> PageSummary:
     page = document.load_page(index)
     rect = page.rect
     return PageSummary(
@@ -126,6 +144,7 @@ def _summarize_page(document: Any, index: int) -> PageSummary:
         width=round(float(rect.width), 3),
         height=round(float(rect.height), 3),
         rotation=int(page.rotation or 0),
+        classification=classification,
     )
 
 
