@@ -240,22 +240,28 @@ Alt text:
 - Else use generic `Figure from page N`.
 - Do not invent diagram semantics.
 
-### Stage F: OCR Fallback Later
+### Stage F: OCR Fallback
 
-OCR is deferred. When added:
+Initial implementation status: implemented as an explicit local Tesseract fallback.
+
+Behavior:
 
 - Use page classifier first.
 - Run OCR only for image-only or textless pages/regions.
 - Do not OCR born-digital pages with meaningful text.
-- Prefer OCRmyPDF for scanned/mixed document normalization.
-- Use Tesseract/pytesseract for targeted page or region OCR.
+- Use Tesseract for targeted page OCR.
 - Cap OCR parallelism to 1-2 workers on `t3.xlarge`.
 - Track OCR pages and confidence in the report.
 
-MVP behavior before OCR:
+Default behavior:
 
 - If a PDF is primarily scanned/image-only, fail with a clear message.
-- If isolated pages are image-only, decide whether to fail or emit placeholder diagnostics before implementation. Current default should be fail because best-effort output is not desired.
+- If isolated pages are image-only, fail unless OCR is explicitly enabled.
+
+Future refinement:
+
+- Prefer OCRmyPDF for scanned/mixed document normalization.
+- Add targeted region OCR where page classification identifies mixed image/text regions.
 
 ### Stage G: Intermediate Document Model
 

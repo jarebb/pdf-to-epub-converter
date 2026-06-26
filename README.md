@@ -40,7 +40,9 @@ Implemented:
 - Stage C: text and layout extraction.
 - Stage D: reading-order reconstruction.
 - Stage E: image and diagram extraction.
-- CLI commands for ingest, extraction, reconstruction, and visual asset reports.
+- Stage F: conditional local OCR fallback for textless/image-only pages.
+- CLI commands for ingest, extraction, reconstruction, OCR-assisted extraction, and visual
+  asset reports.
 - Ruff, mypy, pytest, and pre-commit setup.
 
 Not implemented yet:
@@ -48,7 +50,6 @@ Not implemented yet:
 - Full semantic document model.
 - EPUB rendering and packaging.
 - EPUBCheck validation.
-- OCR fallback.
 
 ## Setup
 
@@ -80,6 +81,16 @@ Generate a JSON text/layout extraction report:
 ```bash
 PYTHONPATH=src python -m pdf_to_epub.cli extract path/to/book.pdf --report reports/extract.json --pretty
 ```
+
+By default, extraction fails if page classification finds textless/image-only OCR
+candidates. To explicitly run local Tesseract OCR for only those pages:
+
+```bash
+PYTHONPATH=src python -m pdf_to_epub.cli extract path/to/book.pdf --enable-ocr --ocr-language eng --ocr-workers 1 --report reports/extract.json --pretty
+```
+
+For Conda-installed Tesseract, the tessdata directory is auto-detected. If needed,
+override it with `--ocr-tessdata-dir /path/to/tessdata`.
 
 Generate a JSON reading-order reconstruction report:
 

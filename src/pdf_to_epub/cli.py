@@ -12,9 +12,16 @@ from typing import Optional
 import fitz
 
 from pdf_to_epub.classify.page_classifier import classify_document_pages
+from pdf_to_epub.extract.models import DocumentExtraction
 from pdf_to_epub.extract.page_extractor import extract_document_model
 from pdf_to_epub.ingest.pdf_loader import IngestError, ingest_pdf
 from pdf_to_epub.ingest.permissions import authenticate_document, summarize_permissions
+from pdf_to_epub.ocr.fallback import (
+    OcrConfig,
+    OcrFallbackError,
+    apply_ocr_fallback,
+    ensure_ocr_not_required,
+)
 from pdf_to_epub.reconstruct.reading_order import reconstruct_reading_order
 from pdf_to_epub.visuals.asset_extractor import extract_visual_assets
 
@@ -65,6 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Pretty-print JSON output.",
     )
+    _add_ocr_options(extract_parser)
 
     reconstruct_parser = subparsers.add_parser(
         "reconstruct",
@@ -85,6 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Pretty-print JSON output.",
     )
+    _add_ocr_options(reconstruct_parser)
 
     visuals_parser = subparsers.add_parser(
         "visuals",
@@ -113,6 +122,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def _add_ocr_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--enable-ocr",
+        action="store_true",
+        help="Run local Tesseract OCR only for pages classified as textless/image-only.",
+    )
+    parser.add_argument(
+        "--ocr-language",
+        default="eng",
+        help="Tesseract language code used when --enable-ocr is set.",
+    )
+    parser.add_argument(
+        "--ocr-dpi",
+        type=int,
+        default=300,
+        help="Rasterization DPI used for OCR pages.",
+    )
+    parser.add_argument(
+        "--ocr-command",
+        default="tesseract",
+        help="Local OCR command to execute when --enable-ocr is set.",
+    )
+    parser.add_argument(
+        "--ocr-tessdata-dir",
+        type=Path,
+        help="Optional tessdata directory; auto-detected for Conda Tesseract installs.",
+    )
+    parser.add_argument(
+        "--ocr-workers",
+        type=int,
+        default=1,
+        help="Maximum OCR worker count; internally capped to 1-2 for CPU-only runtime.",
+    )
 
 
 def _write_json(data: object, report_path: Optional[Path], pretty: bool) -> None:
@@ -145,8 +189,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         try:
-            classifications, _summary = classify_document_pages(document)
-            extraction_result = extract_document_model(document, classifications=classifications)
+            extraction_result = _extract_with_optional_ocr(document, args)
+        except OcrFallbackError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         finally:
             document.close()
         _write_json(extraction_result.to_dict(), args.report, args.pretty)
@@ -159,9 +205,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         try:
-            classifications, _summary = classify_document_pages(document)
-            extraction_result = extract_document_model(document, classifications=classifications)
+            extraction_result = _extract_with_optional_ocr(document, args)
             reconstruction_result = reconstruct_reading_order(extraction_result)
+        except OcrFallbackError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
         finally:
             document.close()
         _write_json(reconstruction_result.to_dict(), args.report, args.pretty)
@@ -207,6 +255,32 @@ def _open_extractable_pdf(input_path: Path, password: Optional[str]) -> fitz.Doc
         document.close()
         raise IngestError("PDF permissions do not allow text/content extraction")
     return document
+
+
+def _extract_with_optional_ocr(
+    document: fitz.Document,
+    args: argparse.Namespace,
+) -> DocumentExtraction:
+    classifications, _summary = classify_document_pages(document)
+    if not args.enable_ocr:
+        ensure_ocr_not_required(classifications)
+        return extract_document_model(document, classifications=classifications)
+
+    extraction_result = extract_document_model(document, classifications=classifications)
+    ocr_config = OcrConfig(
+        language=args.ocr_language,
+        dpi=args.ocr_dpi,
+        max_workers=args.ocr_workers,
+        command=args.ocr_command,
+        tessdata_dir=args.ocr_tessdata_dir,
+    )
+    extraction_result, _ocr_report = apply_ocr_fallback(
+        document,
+        extraction_result,
+        classifications,
+        ocr_config,
+    )
+    return extraction_result
 
 
 if __name__ == "__main__":

@@ -197,9 +197,11 @@ class PageModel:
 class DocumentExtraction:
     page_count: int
     pages: list[PageModel] = field(default_factory=list)
+    diagnostics: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
             "page_count": self.page_count,
             "pages": [page.to_dict() for page in self.pages],
+            "diagnostics": self.diagnostics,
         }
