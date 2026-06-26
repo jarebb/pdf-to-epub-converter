@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-to-epub-converter"
+version = "0.1.0"
+description = "Local, heuristics-first PDF to EPUB 3 converter."
+readme = "docs/TECHNICAL_PLAN.md"
+requires-python = ">=3.9"
+dependencies = [
+  "PyMuPDF>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+]
+
+[project.scripts]
+pdf-to-epub = "pdf_to_epub.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
