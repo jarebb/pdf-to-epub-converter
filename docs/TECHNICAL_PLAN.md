@@ -984,3 +984,17 @@ Current test command:
 ```bash
 pytest -q
 ```
+
+Developer quality checks:
+
+```bash
+python -m pip install -e ".[dev]"
+pre-commit install
+pre-commit run --all-files
+```
+
+The configured pre-commit hooks run:
+
+- `ruff check --fix`
+- `ruff format`
+- `mypy src tests`

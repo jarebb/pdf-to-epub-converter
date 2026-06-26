@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import fitz
 
@@ -21,7 +21,7 @@ class PermissionSummary:
     can_annotate: bool
     can_assemble: bool
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "encrypted": self.encrypted,
             "needs_password": self.needs_password,

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Optional
-
+from typing import Optional
 
 PDF_DATE_RE = re.compile(
     r"^D:"
@@ -26,7 +25,7 @@ def clean_metadata_value(value: object) -> str:
     return str(value).strip().replace("\x00", "")
 
 
-def normalize_pdf_metadata(raw_metadata: Dict[str, object], input_path: Path) -> Dict[str, str]:
+def normalize_pdf_metadata(raw_metadata: dict[str, object], input_path: Path) -> dict[str, str]:
     raw = {key: clean_metadata_value(value) for key, value in raw_metadata.items()}
     title = choose_display_title(raw.get("title", ""), input_path)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import fitz
 
@@ -28,7 +28,7 @@ class PageSummary:
     height: float
     rotation: int
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "index": self.index,
             "number": self.number,
@@ -44,7 +44,7 @@ class OutlineItem:
     title: str
     page_number: int
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "level": self.level,
             "title": self.title,
@@ -57,13 +57,13 @@ class IngestResult:
     input_path: str
     file_size_bytes: int
     page_count: int
-    metadata: Dict[str, str]
+    metadata: dict[str, str]
     permissions: PermissionSummary
-    pages: List[PageSummary] = field(default_factory=list)
-    outline: List[OutlineItem] = field(default_factory=list)
+    pages: list[PageSummary] = field(default_factory=list)
+    outline: list[OutlineItem] = field(default_factory=list)
     xmp_metadata_present: bool = False
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "input_path": self.input_path,
             "file_size_bytes": self.file_size_bytes,
@@ -129,8 +129,8 @@ def _summarize_page(document: Any, index: int) -> PageSummary:
     )
 
 
-def _summarize_outline(document: Any) -> List[OutlineItem]:
-    items: List[OutlineItem] = []
+def _summarize_outline(document: Any) -> list[OutlineItem]:
+    items: list[OutlineItem] = []
     for raw in document.get_toc(simple=True):
         if len(raw) < 3:
             continue
