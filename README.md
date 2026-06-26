@@ -38,12 +38,14 @@ Implemented:
 - Stage A: PDF ingest.
 - Stage B: page classification.
 - Stage C: text and layout extraction.
-- CLI commands for ingest and extraction reports.
+- Stage D: reading-order reconstruction.
+- Stage E: image and diagram extraction.
+- CLI commands for ingest, extraction, reconstruction, and visual asset reports.
 - Ruff, mypy, pytest, and pre-commit setup.
 
 Not implemented yet:
 
-- Reading order reconstruction into a semantic document model.
+- Full semantic document model.
 - EPUB rendering and packaging.
 - EPUBCheck validation.
 - OCR fallback.
@@ -77,6 +79,18 @@ Generate a JSON text/layout extraction report:
 
 ```bash
 PYTHONPATH=src python -m pdf_to_epub.cli extract path/to/book.pdf --report reports/extract.json --pretty
+```
+
+Generate a JSON reading-order reconstruction report:
+
+```bash
+PYTHONPATH=src python -m pdf_to_epub.cli reconstruct path/to/book.pdf --report reports/reconstruct.json --pretty
+```
+
+Extract embedded images and rasterized vector diagram regions:
+
+```bash
+PYTHONPATH=src python -m pdf_to_epub.cli visuals path/to/book.pdf --assets-dir reports/assets --report reports/visuals.json --pretty
 ```
 
 ## Development

@@ -15,6 +15,8 @@ from pdf_to_epub.classify.page_classifier import classify_document_pages
 from pdf_to_epub.extract.page_extractor import extract_document_model
 from pdf_to_epub.ingest.pdf_loader import IngestError, ingest_pdf
 from pdf_to_epub.ingest.permissions import authenticate_document, summarize_permissions
+from pdf_to_epub.reconstruct.reading_order import reconstruct_reading_order
+from pdf_to_epub.visuals.asset_extractor import extract_visual_assets
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,6 +66,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pretty-print JSON output.",
     )
 
+    reconstruct_parser = subparsers.add_parser(
+        "reconstruct",
+        help="Infer a reading-order stream from extracted page models.",
+    )
+    reconstruct_parser.add_argument("input_pdf", type=Path, help="Path to the input PDF.")
+    reconstruct_parser.add_argument(
+        "--password",
+        help="Password for encrypted PDFs. Refuses encrypted PDFs if omitted or invalid.",
+    )
+    reconstruct_parser.add_argument(
+        "--report",
+        type=Path,
+        help="Optional path to write the reconstruction report as JSON.",
+    )
+    reconstruct_parser.add_argument(
+        "--pretty",
+        action="store_true",
+        help="Pretty-print JSON output.",
+    )
+
+    visuals_parser = subparsers.add_parser(
+        "visuals",
+        help="Extract embedded images and rasterized vector diagram regions.",
+    )
+    visuals_parser.add_argument("input_pdf", type=Path, help="Path to the input PDF.")
+    visuals_parser.add_argument(
+        "--assets-dir",
+        required=True,
+        type=Path,
+        help="Directory where extracted visual assets will be written.",
+    )
+    visuals_parser.add_argument(
+        "--password",
+        help="Password for encrypted PDFs. Refuses encrypted PDFs if omitted or invalid.",
+    )
+    visuals_parser.add_argument(
+        "--report",
+        type=Path,
+        help="Optional path to write the visual asset manifest as JSON.",
+    )
+    visuals_parser.add_argument(
+        "--pretty",
+        action="store_true",
+        help="Pretty-print JSON output.",
+    )
+
     return parser
 
 
@@ -102,6 +150,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         finally:
             document.close()
         _write_json(extraction_result.to_dict(), args.report, args.pretty)
+        return 0
+
+    if args.command == "reconstruct":
+        try:
+            document = _open_extractable_pdf(args.input_pdf, password=args.password)
+        except IngestError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            classifications, _summary = classify_document_pages(document)
+            extraction_result = extract_document_model(document, classifications=classifications)
+            reconstruction_result = reconstruct_reading_order(extraction_result)
+        finally:
+            document.close()
+        _write_json(reconstruction_result.to_dict(), args.report, args.pretty)
+        return 0
+
+    if args.command == "visuals":
+        try:
+            document = _open_extractable_pdf(args.input_pdf, password=args.password)
+        except IngestError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            visual_result = extract_visual_assets(document, args.assets_dir)
+        finally:
+            document.close()
+        _write_json(visual_result.to_dict(), args.report, args.pretty)
         return 0
 
     parser.print_help()
