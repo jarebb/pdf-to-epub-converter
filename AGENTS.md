@@ -43,6 +43,11 @@ Use a staged pipeline:
 8. Validate with EPUBCheck.
 9. Emit a quality/conversion report.
 
+Code layout:
+
+- Python source lives under `src/pdf_to_epub/`.
+- Tests live under `tests/`.
+
 Core libraries to prefer:
 
 - PyMuPDF (`fitz`) as the primary PDF engine.

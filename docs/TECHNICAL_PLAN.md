@@ -702,64 +702,65 @@ Edge policies:
 ## 7. Proposed Project Structure
 
 ```text
-pdf_to_epub/
-  __init__.py
-  cli.py
+src/
+  pdf_to_epub/
+    __init__.py
+    cli.py
 
-  config.py
-  logging_config.py
+    config.py
+    logging_config.py
 
-  ingest/
-    pdf_loader.py
-    permissions.py
-    metadata.py
+    ingest/
+      pdf_loader.py
+      permissions.py
+      metadata.py
 
-  classify/
-    page_classifier.py
-    text_layer.py
-    image_coverage.py
+    classify/
+      page_classifier.py
+      text_layer.py
+      image_coverage.py
 
-  extract/
-    pymupdf_extractor.py
-    pdfplumber_tables.py
-    pdfminer_fallback.py
-    images.py
-    drawings.py
-    ocr.py
+    extract/
+      pymupdf_extractor.py
+      pdfplumber_tables.py
+      pdfminer_fallback.py
+      images.py
+      drawings.py
+      ocr.py
 
-  model/
-    document.py
-    blocks.py
-    assets.py
-    diagnostics.py
-    serialization.py
+    model/
+      document.py
+      blocks.py
+      assets.py
+      diagnostics.py
+      serialization.py
 
-  analysis/
-    reading_order.py
-    columns.py
-    headers_footers.py
-    headings.py
-    lists.py
-    code_blocks.py
-    tables.py
-    footnotes.py
-    captions.py
-    cleanup.py
+    analysis/
+      reading_order.py
+      columns.py
+      headers_footers.py
+      headings.py
+      lists.py
+      code_blocks.py
+      tables.py
+      footnotes.py
+      captions.py
+      cleanup.py
 
-  render/
-    html_writer.py
-    css_writer.py
-    nav_writer.py
-    opf_writer.py
-    asset_writer.py
-    epub_zip.py
+    render/
+      html_writer.py
+      css_writer.py
+      nav_writer.py
+      opf_writer.py
+      asset_writer.py
+      epub_zip.py
 
-  validate/
-    epubcheck.py
-    quality_report.py
+    validate/
+      epubcheck.py
+      quality_report.py
 
-  optional/
-    llm_tiebreaker.py
+    optional/
+      llm_tiebreaker.py
 
 tests/
   unit/
@@ -944,12 +945,13 @@ Stage A has been started with a narrow ingest package and CLI.
 Implemented modules:
 
 ```text
-pdf_to_epub/
-  cli.py
-  ingest/
-    metadata.py
-    permissions.py
-    pdf_loader.py
+src/
+  pdf_to_epub/
+    cli.py
+    ingest/
+      metadata.py
+      permissions.py
+      pdf_loader.py
 ```
 
 Current behavior:
@@ -967,14 +969,14 @@ Current behavior:
 CLI usage:
 
 ```bash
-python -m pdf_to_epub.cli ingest path/to/input.pdf --pretty
-python -m pdf_to_epub.cli ingest path/to/input.pdf --report reports/ingest.json --pretty
+PYTHONPATH=src python -m pdf_to_epub.cli ingest path/to/input.pdf --pretty
+PYTHONPATH=src python -m pdf_to_epub.cli ingest path/to/input.pdf --report reports/ingest.json --pretty
 ```
 
 Sample smoke command:
 
 ```bash
-python -m pdf_to_epub.cli ingest "assets/Continuous Delivery Reliable Software Releases through Build, Test, and Deployment Automation by Jez Humble, David Farley (z-lib.org).pdf" --pretty --report /tmp/pdf-to-epub-ingest.json
+PYTHONPATH=src python -m pdf_to_epub.cli ingest "assets/Continuous Delivery Reliable Software Releases through Build, Test, and Deployment Automation by Jez Humble, David Farley (z-lib.org).pdf" --pretty --report /tmp/pdf-to-epub-ingest.json
 ```
 
 Current test command:

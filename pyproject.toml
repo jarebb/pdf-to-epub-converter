@@ -20,6 +20,9 @@ dev = [
 [project.scripts]
 pdf-to-epub = "pdf_to_epub.cli:main"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
